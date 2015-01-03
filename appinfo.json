@@ -1,9 +1,9 @@
 {
     "appKeys": {},
     "capabilities": [
-        ""
+        "configurable"
     ],
-    "companyName": "pdlw-getpebble-com@linkbeat.co",
+    "companyName": "Linkbeat Technologies",
     "longName": "SimpliSafe",
     "projectType": "pebblejs",
     "resources": {

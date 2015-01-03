@@ -6,27 +6,90 @@
 
 var UI = require('ui');
 var ajax = require('ajax');
+var Settings = require('settings');
+
 //var Vector2 = require('vector2');
 //var URL = 'http://api.openweathermap.org/data/2.5/weather?q=London,uk';
 
-var main = new UI.Card({
+var stateNums = { 2: 'Off', 4: 'Home', 5: 'Away', };
+var currentState = "";
+
+// global ui element definitions
+var menu;
+
+
+//https://dl.dropboxusercontent.com/u/2051985/sites/prestonwho.com/pebble/simplisafe/config.html
+// Set a configurable with the open callback
+Settings.config(
+  { url: 'https://dl.dropboxusercontent.com/u/2051985/sites/prestonwho.com/pebble/simplisafe/config.html', autoSave: true },
+  function(e) {
+    console.log('opening configurable');
+
+    // Reset color to red before opening the webview
+    //Settings.option('user', 'changeme');
+    //Settings.option('pass', 'changeme');
+  },
+  function(e) {
+    console.log('closed configurable');
+    // Show the parsed response
+    
+    console.log(JSON.stringify(e.options));
+
+    console.log("Settings.option('user'): " + Settings.option('user'));
+    
+    // Show the raw response if parsing failed
+    if (e.failed) {
+      console.log(e.response);
+    }
+  }
+);
+
+
+/*var main = new UI.Card({
   title: 'SimpliSafe',
   icon: 'images/menu_icon.png',
   subtitle: 'Logging in.',
   body: 'Please wait...'
-});
+});*/
 
 // Show splash
 var splashCard = new UI.Card({
   title: "SimpliSafe",
-  subtitle: 'Logging In.',
-  body: "Please Wait..."
+  subtitle: 'Starting Up.',
+  body: "Logging In...",
 });
 
 
-main.show();
+var errorCard = new UI.Card({
+  title: "SimpliSafe",
+  subtitle: 'Error',
+  body: "Generic Error Screen. Sorry. :-(",
+});
 
-splashCard.show();
+
+//main.show();
+
+
+
+if(! Settings.option('user'))
+{
+  // Show help for first login
+  var firstCard = new UI.Card({
+    title: 'SimpliSafe',
+    subtitle: 'First Start',
+    body: 'Please configure using Pebble phone app.',
+  });
+  
+  firstCard.show();
+}
+else
+{
+  splashCard.show();
+
+  login();
+}
+
+
 
 // Login
 function login()
@@ -34,14 +97,21 @@ function login()
   ajax({ url: 'https://simplisafe.com/mobile/login/?mobile=true',
          method: 'POST',
          type: 'text',
-         data: 'name=prestonwho&pass=77B52sC_Bkqk9wKYu&device_name=my_iphone&device_uuid=51644e80-1b62-11e3-b773-0800200c9a66&version=1200&no_persist=1&XDEBUG_SESSION_START=session_name',
+         data: 'name=' + Settings.option('user') + '&pass=' + Settings.option('pass') + '&device_name=my_iphone&device_uuid=51644e80-1b62-11e3-b773-0800200c9a66&version=1200&no_persist=0&XDEBUG_SESSION_START=session_name',
          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
        },
        // Successful Login
        function(text) {
          console.log('got text ' + text); //json.stringify);
          var json = JSON.parse(text,2);
-
+         
+         if(json.return_code === 0)
+         {
+           errorCard.show();
+           splashCard.hide();
+           return;
+         }
+         
          getlocations(json.uid);
        },
        // Failed Login
@@ -58,19 +128,25 @@ function login()
 // Get location list next
 function getlocations(uid)
 {
+  splashCard.body('Logged In.\nGetting Locations...');
+  
   ajax({ url: 'https://simplisafe.com/mobile/' + uid + '/locations',
         method: 'POST',
         type: 'text',
-        data: 'no_persist=1&XDEBUG_SESSION_START=session_name',
+        data: 'no_persist=0&XDEBUG_SESSION_START=session_name',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
        },
        // Successful location list
        function(text) {
          console.log('got text ' + text);
          var locations = JSON.parse(text,2);
+         currentState = locations.locations[(Object.keys(locations.locations)[0])].system_state;
+         
          console.log('location count: ' + locations.num_locations);
          console.log('loc 0: ' + locations.locations[(Object.keys(locations.locations)[0])].system_state);
+         
          showmenu(uid,Object.keys(locations.locations)[0]);
+         
          //return locations[0];
        },
        // Failed location list
@@ -82,23 +158,43 @@ function getlocations(uid)
     );
 }
 
+function buildMenu()
+{
+  menu.item(0, 0, {
+            title: 'Off' + (currentState.toLowerCase()=="off"?" (current)":""),
+            subtitle: 'Disable Alarm',
+          });
+  menu.item(0, 1, {
+            title: 'Away' + (currentState.toLowerCase()=="away"?" (current)":""),
+            subtitle: 'Arm Alarm',
+          });
+  menu.item(0, 2, {
+            title: 'Home' + (currentState.toLowerCase()=="home"?" (current)":""),
+            subtitle: 'Arm doors, not motion',
+          });
+  //menu.item(0, 0, { title: 'A new item', subtitle: 'replacing the previous one' });
+}
+
 function showmenu(uid,lid)
 {
-      var menu = new UI.Menu({
+      menu = new UI.Menu();
+      /*{
         sections: [{
           items: [{
-            title: 'Off',
-            //icon: 'images/menu_icon.png',
+            title: 'Off' + (currentState=="Off"?" (current)":""),
             subtitle: 'Disable Alarm',
           }, {
-            title: 'Away',
+            title: 'Away' + (currentState=="Away"?" (current)":""),
             subtitle: 'Arm Alarm',
           }, {
-            title: 'Home',
+            title: 'Home' + (currentState=="Home"?" (current)":""),
             subtitle: 'Arm doors, not motion',
           }]
         }]
-      });
+      });*/
+  
+      buildMenu();
+  
   
       menu.on('select', function(e)
       {  
@@ -121,42 +217,59 @@ function showmenu(uid,lid)
          
         var waitCard = new UI.Card({
           title: "Changing State",
-          body: "To " + newstate.toUpper() + '.',
+          body: "To " + newstate + '.',
         });
         
         waitCard.show();
+        //menu.hide();
         
         ajax({ url: 'https://simplisafe.com/mobile/' + uid + '/sid/' + lid + '/set-state',
               method: 'POST',
               type: 'text',
-              data: 'state=' + newstate + '&mobile=1&no_persist=1&XDEBUG_SESSION_START=session_name',
+              data: 'state=' + newstate + '&mobile=1&no_persist=0&XDEBUG_SESSION_START=session_name',
               headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
              },
 
              function(text) {
                console.log('got text ' + text);
                var feedback = JSON.parse(text,2);
-               waitCard.hide();
+               currentState = stateNums[feedback.result];
+               waitCard.title("SimpliSafe");
+               waitCard.subtitle("State updated.");
+               waitCard.body("Alarm is now set to " + currentState + ".");
+               waitCard.show();
+               //waitCard.hide();
+               setTimeout(function() { buildMenu(); waitCard.hide(); }, 3000);
              },
              // Failed location list
              function(error) {
                console.log('menu ' + newstate + ' failed: ' + error);
+               
+               var errorCard = new UI.Card({
+                 title: "SimpliSafe",
+                 subtitle: 'Error:',
+                 body: error,
+               });
+        
+               errorCard.show();
+               
                waitCard.hide();
+               menu.hide();
 
-               return null;
+               //return null;
              });
               
         });
 
   
-        menu.show(); 
+        menu.show();
         
-        //splashCard.hide();
+        splashCard.hide();
       }
 
 
      
-login();
+
 
   
   
