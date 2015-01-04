@@ -21,7 +21,7 @@ var menu;
 //https://dl.dropboxusercontent.com/u/2051985/sites/prestonwho.com/pebble/simplisafe/config.html
 // Set a configurable with the open callback
 Settings.config(
-  { url: 'https://dl.dropboxusercontent.com/u/2051985/sites/prestonwho.com/pebble/simplisafe/config.html', autoSave: true },
+  { url: 'https://dl.dropboxusercontent.com/u/2051985/sites/prestonwho.com/pebble/simplisafe/config.html?user=' + Settings.option('user') + '&pass=' + Settings.option('pass'), autoSave: true },
   function(e) {
     console.log('opening configurable');
 
