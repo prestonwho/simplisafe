@@ -4,10 +4,17 @@
  * This is where you write your app.
  */
 
+require('cards.js');
 
 var UI = require('ui');
+
+
+splashCard.show();
+
+
 var ajax = require('ajax');
 var Settings = require('settings');
+var Vibe = require('ui/vibe');
 
 var user = Settings.option('user');
 var pass = Settings.option('pass');
@@ -16,6 +23,7 @@ var lid = Settings.option('lid');
 
 var stateNums = { 2: 'Off', 4: 'Home', 5: 'Away', };
 var currentState = "";
+var loginRetry = 1;
 
 // global ui element definitions
 var menu;
@@ -48,27 +56,20 @@ Settings.config(
 );
 
 
-// splash card
-var splashCard = new UI.Card({
-  //title: "SimpliSafe",
-  //subtitle: 'Starting Up.',
-  //body: "Logging In...",
-  banner: 'simplisafe.png',
-});
-
+var waitCard = new UI.Card({ title: 'SimpliSafe', icon: 'images/simplisafe-icon.png', subtitle: "Changing State", });
 
 // error card
-var errorCard = new UI.Card({
-  title: "SimpliSafe",
-  subtitle: 'Error',
-  body: "Generic Error Screen. Sorry. :-(",
-});
+var errorCard = new UI.Card({ title: 'SimpliSafe', icon: 'images/simplisafe-icon.png', subtitle: 'Error', });
 
 
 if(user)
 {
-  splashCard.show();
-  //login();
+  //splashCard.show();
+  if(uid && lid) getLocations();
+  else
+  {
+    login();
+  }
 }
 else
 {
@@ -76,8 +77,9 @@ else
   var firstCard = new UI.Card(
   {
     title: 'SimpliSafe',
+    icon: 'images/simplisafe-icon.png',
     subtitle: 'First Start',
-    body: 'Please configure using Pebble phone app.',
+    body: 'Please configure using the Pebble phone app.',
   });
   
   firstCard.show();
@@ -103,27 +105,36 @@ function login()
       console.log('got text ' + text); //json.stringify);
       var json = JSON.parse(text,2);
          
-      if(json.return_code === 0)
+      if(json.return_code != 1)
       {
-        errorCard.show();
-        splashCard.hide();
-        return;
+        errorBomb();
+      } 
+      else
+      {
+        uid = json.uid;
+        Settings.option('uid',uid);
+        getLocations();
       }
-         
-      uid = json.uid;
-      Settings.option('uid',uid);
-      getLocations();
     },
     // Failed Login
     function(error) {
       console.log('Ajax failed: ' + error);
-         
+      
+      errorBomb('Ajax failed: ' + error);
+
       return null;
     }
   );
 }
 
-
+function errorBomb(text)
+{
+  errorCard.body(text);
+  errorCard.show();
+  menu.hide();
+  splashCard.hide();
+  waitCard.hide();
+}
   
 // Get location list next
 function getLocations()
@@ -189,79 +200,79 @@ function updateMenu()
 
 function showMenu()
 {
-menu = new UI.Menu();
+  menu = new UI.Menu();
+  
+  updateMenu();
+  
 
-updateMenu();
-
-
-menu.on('select', function(e)
-{  
-  var newstate;
+  menu.on('select', function(e)
+  {  
+    var newstate;
+       
+    console.log('Selected item #' + e.itemIndex + ' of section #' + e.sectionIndex);
+    console.log('The item is titled "' + e.item.title + '"');
+  
+    switch(e.itemIndex) {
+      case 0:
+        newstate='off';
+        break;
+      case 1:
+        newstate='away';
+        break;
+      case 2:
+        newstate='home';
+        break;
+    }
      
-  console.log('Selected item #' + e.itemIndex + ' of section #' + e.sectionIndex);
-  console.log('The item is titled "' + e.item.title + '"');
-
-  switch(e.itemIndex) {
-    case 0:
-      newstate='off';
-      break;
-    case 1:
-      newstate='away';
-      break;
-    case 2:
-      newstate='home';
-      break;
-  }
-   
-  var waitCard = new UI.Card({
-    title: "Changing State",
-    body: "To " + newstate + '.',
-  });
+    /*var waitCard = new UI.Card({
+      title: 'SimpliSafe',
+      icon: 'images/simplisafe-icon.png',
+      subtitle: "Changing State",
+      body: "To " + newstate + '.',
+    });*/
+    
+    waitCard.body("To " + newstate + ".");
+    waitCard.show();
+    //menu.hide();
+    
+    ajax(
+      {
+        url: 'https://simplisafe.com/mobile/' + uid + '/sid/' + lid + '/set-state',
+        method: 'POST',
+        type: 'text',
+        data: 'state=' + newstate + '&mobile=1&no_persist=0&XDEBUG_SESSION_START=session_name',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      },
   
-  waitCard.show();
-  //menu.hide();
-  
-  ajax(
-    {
-      url: 'https://simplisafe.com/mobile/' + uid + '/sid/' + lid + '/set-state',
-      method: 'POST',
-      type: 'text',
-      data: 'state=' + newstate + '&mobile=1&no_persist=0&XDEBUG_SESSION_START=session_name',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    },
-
-    function(text) {
-      console.log('got text ' + text);
-      var feedback = JSON.parse(text,2);
-      currentState = stateNums[feedback.result];
-      
-      waitCard.title("SimpliSafe");
-      waitCard.subtitle("State updated.");
-      waitCard.body("Alarm is now set to " + currentState + ".");
-      waitCard.show();
-      //waitCard.hide();
-      setTimeout(function() { updateMenu(); waitCard.hide(); }, 3000);
-    },
-    // Failed location list
-    function(error) {
-      console.log('menu ' + newstate + ' failed: ' + error);
-         
-      var errorCard = new UI.Card({
-        title: "SimpliSafe",
-        subtitle: 'Error:',
-        body: error,
-      });
-  
-      errorCard.show();
-         
-      waitCard.hide();
-      menu.hide();
-
-         //return null;
-    });
+      function(text) {
+        console.log('got text ' + text);
+        var feedback = JSON.parse(text,2);
+        currentState = stateNums[feedback.result];
         
+        waitCard.title('SimpliSafe');
+        waitCard.icon('images/simplisafe-icon.png');
+        waitCard.subtitle('State updated.');
+        waitCard.body('Alarm is now set to ' + currentState + '.');
+        waitCard.show();
+        
+        Vibe.vibrate('short');
+        
+        //waitCard.hide();
+        setTimeout(function() { updateMenu(); waitCard.hide(); }, 3000);
+      },
+      // Failed location list
+      function(error) {
+        console.log('menu ' + newstate + ' failed: ' + error);
+           
+        errorBomb("Error changing state: " + error);
+           
+        //waitCard.hide();
+        //menu.hide();
+  
+        //return null;
+      }
+    );
   });
-
 
   menu.show();
   

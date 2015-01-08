@@ -29,14 +29,14 @@
                 "type": "font"
             },
             {
-                "file": "images/simplisafe-icon.png",
-                "menuIcon": true,
-                "name": "IMAGES_SIMPLISAFE_ICON_PNG",
+                "file": "images/simplisafe.png",
+                "name": "IMAGES_SIMPLISAFE_PNG",
                 "type": "png"
             },
             {
-                "file": "images/simplisafe.png",
-                "name": "IMAGES_SIMPLISAFE_PNG",
+                "file": "images/simplisafe-icon.png",
+                "menuIcon": true,
+                "name": "IMAGES_SIMPLISAFE_ICON_PNG",
                 "type": "png"
             }
         ]
